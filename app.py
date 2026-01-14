@@ -247,6 +247,18 @@ with col_view:
             mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
         
+        # --- TAMBAHAN: TOMBOL BACKUP (PENTING!) ---
+        st.write("") # Jarak dikit
+        st.caption("⚠️ Jaga-jaga! Download file backup ini secara berkala.")
+        csv_backup = df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="💾 Download File Backup (CSV)",
+            data=csv_backup,
+            file_name='Backup_Data_Catshow.csv',
+            mime='text/csv',
+            key='download-csv'
+        )
+        
         with st.expander("Danger Zone"):
             if st.button("HAPUS DATABASE"):
                 if os.path.exists(FILE_DATABASE):
