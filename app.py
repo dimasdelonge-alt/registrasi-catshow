@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 import io
+import time
 
 # --- LIBRARY PDF BARU ---
 from reportlab.lib.pagesizes import A4
@@ -44,7 +45,7 @@ def add_data(data_baru):
     df_update.to_csv(FILE_DATABASE, index=False)
     return df_update
 
-# --- FUNGSI GENERATE PDF (GRID 8 ID CARD) ---
+# --- FUNGSI GENERATE PDF (GRID 8 ID CARD - HEADER CENTER) ---
 @st.cache_data
 def generate_number_tags(df_input, current_show_type):
     # 1. SIAPKAN DATA
@@ -70,18 +71,17 @@ def generate_number_tags(df_input, current_show_type):
 
     df = df.sort_values(by=sort_keys, ascending=[True]*len(sort_keys))
     
-    # 2. SETUP CANVAS PDF
+    # 2. SETUP CANVAS
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
-    width, height = A4 # A4: 210 x 297 mm
+    width, height = A4 
     
-    # --- KONFIGURASI GRID (8 KOTAK: 2 Kolom x 4 Baris) ---
+    # KONFIGURASI GRID (8 KOTAK)
     margin_left = 10 * mm
     margin_top = 10 * mm
     cols = 2
     rows = 4
     
-    # Hitung Lebar/Tinggi per Kotak
     box_w = (width - (2 * margin_left)) / cols  
     box_h = (height - (2 * margin_top)) / rows 
     
@@ -99,12 +99,12 @@ def generate_number_tags(df_input, current_show_type):
         nomor_urut = str(i + 1)
         row_data = df.iloc[i]
         
-        # --- BACKGROUND & BORDER ---
+        # BORDER KOTAK
         c.setLineWidth(1)
         c.rect(x_start, y_start, box_w, box_h)
         
-        # --- 1. HEADER (KOP) ---
-        header_h = 15 * mm # Tinggi area header
+        # --- 1. HEADER (KOP CENTER) ---
+        header_h = 20 * mm 
         header_y_base = y_start + box_h - header_h
         
         # Garis pembatas header
@@ -113,43 +113,68 @@ def generate_number_tags(df_input, current_show_type):
         
         # Logo & Tulisan
         if has_logo:
-            c.drawImage(logo_path, x_start + 5*mm, header_y_base + 3*mm, width=10*mm, height=10*mm, mask='auto')
-            c.setFont("Helvetica-Bold", 10)
-            c.drawString(x_start + 18*mm, header_y_base + 8*mm, "SMART GROOMER")
-            c.drawString(x_start + 18*mm, header_y_base + 4*mm, "INDONESIA")
+            # Logo tetap di kiri
+            c.drawImage(logo_path, x_start + 4*mm, header_y_base + 3*mm, width=13*mm, height=13*mm, mask='auto')
+            
+            # --- PERUBAHAN DISINI (JADI TENGAH) ---
+            c.setFont("Helvetica-Bold", 11) 
+            
+            # Cari titik tengah kotak secara horizontal
+            center_x_header = x_start + (box_w / 2)
+            
+            # Gunakan drawCentredString (bukan drawString biasa)
+            # SMART GROOMER (Baris 1)
+            c.drawCentredString(center_x_header, header_y_base + 10*mm, "SMART GROOMER")
+            
+            # INDONESIA (Baris 2)
+            c.drawCentredString(center_x_header, header_y_base + 5*mm, "INDONESIA")
+            
         else:
+            # Kalau tidak ada logo (Logika sama)
             c.setFont("Helvetica-Bold", 12)
-            c.drawCentredString(x_start + (box_w/2), header_y_base + 6*mm, "SMART GROOMER INDONESIA")
+            center_x_header = x_start + (box_w / 2)
+            c.drawCentredString(center_x_header, header_y_base + 10*mm, "SMART GROOMER")
+            c.drawCentredString(center_x_header, header_y_base + 5*mm, "INDONESIA")
 
-        # Info Kelas Kecil di Pojok Kanan Atas
+        # Info Kelas (Pojok Kanan Atas Header)
         c.setFont("Helvetica", 8)
-        c.drawRightString(x_start + box_w - 5*mm, header_y_base + 4*mm, f"Kelas: {row_data['Kategori Umur']}")
+        c.drawRightString(x_start + box_w - 3*mm, header_y_base + 8*mm, f"Kelas: {row_data['Kategori Umur']}")
 
-        # --- 2. NOMOR URUT (CENTER BIG) ---
-        # Area tengah
-        c.setFont("Helvetica-Bold", 45) # Ukuran Font Besar
-        c.drawCentredString(x_start + (box_w/2), y_start + (box_h/2) + 5*mm, nomor_urut)
+        # --- 2. NOMOR URUT (CENTER) ---
+        c.setFont("Helvetica-Bold", 75) 
+        # Tetap pakai MINUS (-) biar aman
+        c.drawCentredString(x_start + (box_w/2), y_start + (box_h/2) - 12*mm, nomor_urut)
         
-        # --- 3. DETAIL INFO (BAWAH) ---
-        detail_y_start = y_start + 15*mm
-        c.setFont("Helvetica-Bold", 10)
-        c.drawString(x_start + 5*mm, detail_y_start + 5*mm, f"Name : {str(row_data['Nama Kucing'])[:20]}") # Potong jika kepanjangan
+        # --- 3. FOOTER INFO (BAWAH) ---
+        bottom_margin = 5 * mm
+        line_spacing = 4.5 * mm 
         
-        c.setFont("Helvetica", 9)
-        c.drawString(x_start + 5*mm, detail_y_start, f"Breed : {row_data['Ras']} ({row_data['Warna']})")
-        c.drawString(x_start + 5*mm, detail_y_start - 5*mm, f"Sex    : {row_data['Jenis Kelamin']}")
+        # Sex
+        c.setFont("Helvetica", 10)
+        c.drawString(x_start + 5*mm, y_start + bottom_margin, f"Sex    : {row_data['Jenis Kelamin']}")
+        
+        # Breed
+        ras_text = f"{row_data['Ras']} ({row_data['Warna']})"
+        if len(ras_text) > 35: ras_text = ras_text[:32] + "..."
+        c.drawString(x_start + 5*mm, y_start + bottom_margin + line_spacing, f"Breed : {ras_text}")
+        
+        # Name
+        c.setFont("Helvetica-Bold", 11)
+        name_text = str(row_data['Nama Kucing'])
+        if len(name_text) > 25: name_text = name_text[:22] + "..."
+        c.drawString(x_start + 5*mm, y_start + bottom_margin + (line_spacing * 2.5), f"Name : {name_text}")
 
-        # --- LOGIKA PINDAH KOTAK ---
+        # LOGIKA PINDAH KOTAK
         x_start += box_w
         col_counter += 1
         
-        if col_counter >= cols: # Pindah Baris
+        if col_counter >= cols: 
             col_counter = 0
             x_start = margin_left
             y_start -= box_h
             row_counter += 1
             
-        if row_counter >= rows: # Ganti Halaman
+        if row_counter >= rows: 
             c.showPage()
             x_start = margin_left
             y_start = height - margin_top - box_h
@@ -314,9 +339,10 @@ with tab1:
         
         if st.button("Daftarkan Peserta 🚀", type="primary"):
             if not owner or not cat_name or not warna:
-                pesan_container.error("⚠️ Data belum lengkap!")
+                st.toast("⚠️ Data belum lengkap! Cek lagi ya.", icon="❌") # Toast Error
             else:
                 kelas_final = tentukan_kelas(tipe_show, ras_final, status_pilih, umur_pilih)
+                
                 data_baru = pd.DataFrame([{
                     "Nama Pemilik": owner, "No HP": hp, "Nama Kucing": cat_name,
                     "Jenis Kelamin": sex,
@@ -324,7 +350,11 @@ with tab1:
                     "Kategori Umur": umur_pilih, "Kelas Lomba": kelas_final
                 }])
                 add_data(data_baru)
-                pesan_container.success(f"✅ {cat_name} ({sex}) terdaftar!")
+                
+                # --- TOAST SUKSES ---
+                st.toast(f"✅ Berhasil! {cat_name} sudah masuk database.", icon='🎉')
+                time.sleep(1.5) # Jeda 1.5 detik biar toast terbaca dulu
+                
                 reset_form()
                 st.rerun()
 
@@ -412,12 +442,11 @@ with tab2:
                     kelas_baru = tentukan_kelas(tipe_show, e_ras, e_status, e_umur)
                     df.loc[pilihan_edit] = [e_owner, e_hp, e_cat, e_sex, e_ras, e_warna, e_status, e_umur, kelas_baru]
                     save_overwrite(df)
-                    st.success("Updated!")
-                    st.rerun()
-
-                if delete_submitted:
-                    df = df.drop(index=pilihan_edit)
-                    save_overwrite(df)
+                    
+                    # --- TOAST SUKSES EDIT ---
+                    st.toast("✅ Data peserta berhasil diperbarui!", icon='💾')
+                    time.sleep(1.5) # Jeda biar admin tenang
+                    
                     st.rerun()
                     
         st.divider()
