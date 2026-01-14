@@ -19,7 +19,6 @@ def reset_form():
 def load_data():
     if os.path.exists(FILE_DATABASE):
         df = pd.read_csv(FILE_DATABASE)
-        # Pastikan kolom Jenis Kelamin ada (jika load data lama)
         if 'Jenis Kelamin' not in df.columns:
             df['Jenis Kelamin'] = '-'
         return df
@@ -29,18 +28,23 @@ def load_data():
             "Status", "Kategori Umur", "Kelas Lomba"
         ])
 
-def save_data(data_baru):
+def save_overwrite(df_new):
+    """Menimpa total file CSV dengan dataframe baru (untuk Edit/Hapus)"""
+    df_new.to_csv(FILE_DATABASE, index=False)
+    return df_new
+
+def add_data(data_baru):
+    """Menambah data baru ke baris paling bawah"""
     df_lama = load_data()
-    # Pastikan urutan kolom konsisten saat save
     df_update = pd.concat([df_lama, data_baru], ignore_index=True)
     df_update.to_csv(FILE_DATABASE, index=False)
     return df_update
 
-# --- FUNGSI EXPORT EXCEL ---
+# --- FUNGSI EXPORT EXCEL (TETAP SAMA) ---
 def to_excel_styled(df_input, current_show_type):
     df = df_input.copy()
     
-    # --- HELPER RANKING ---
+    # Helper Ranking
     def get_group_rank(ras_val):
         if ras_val == "Domestik": return 3
         elif ras_val == "Household Pet (Mix)": return 2
@@ -59,7 +63,6 @@ def to_excel_styled(df_input, current_show_type):
     df['Rank_Age'] = df['Kategori Umur'].apply(get_age_rank)
     df['Rank_Status'] = df['Status'].apply(get_status_rank)
     
-    # --- LOGIKA SORTING ---
     if "Tipe 1" in current_show_type:
         sort_keys = ['Rank_Group', 'Rank_Status', 'Rank_Age', 'Ras', 'Warna']
     else:
@@ -67,13 +70,9 @@ def to_excel_styled(df_input, current_show_type):
 
     df = df.sort_values(by=sort_keys, ascending=[True]*len(sort_keys))
     
-    # Generate Nomor Urut
     df.insert(0, 'No', range(1, 1 + len(df)))
-    
     df = df.drop(columns=['Rank_Group', 'Rank_Age', 'Rank_Status'])
 
-    # --- DEFINISI KOLOM EXCEL ---
-    # Menambahkan "Jenis Kelamin" setelah Nama Kucing
     cols_final = ["No", "Nama Pemilik", "No HP", "Nama Kucing", "Jenis Kelamin", "Ras", "Warna", "Status", "Kategori Umur", "Kelas Lomba"]
     
     if "Tipe 2" in current_show_type:
@@ -94,7 +93,6 @@ def to_excel_styled(df_input, current_show_type):
         
         sheet_name = str(kelas)[:30].replace("/", "-").replace(":", "").replace("[", "").replace("]", "").replace("(", "").replace(")", "")
         ws = wb.add_worksheet(sheet_name)
-        
         ws.merge_range(0, 0, 0, len(cols_final)-1, kelas.upper(), fmt_title)
         
         for col_num, col_name in enumerate(cols_final):
@@ -134,7 +132,6 @@ def tentukan_kelas(tipe_show, ras_full, status, umur_cat):
 
 # --- SIDEBAR ---
 with st.sidebar:
-    # Pastikan file logo.png ada di folder yang sama
     if os.path.exists("logo.png"):
         st.image("logo.png", use_container_width=True)
         
@@ -148,127 +145,195 @@ with st.sidebar:
         try:
             if uploaded_file.name.endswith('.csv'): df_in = pd.read_csv(uploaded_file)
             else: df_in = pd.read_excel(uploaded_file)
-            save_data(df_in)
+            add_data(df_in)
             st.success("Data berhasil diimport!")
             st.rerun()
         except Exception as e:
             st.error(f"Error: {e}")
 
 # --- UI UTAMA ---
-# Judul Organisasi (Paling Besar)
 st.title("Smart Groomer Indonesia")
-# Nama Sistem (Lebih kecil sedikit)
 st.subheader("🏆 Sistem Registrasi Catshow")
-# Keterangan Mode
 st.caption(f"Mode Aktif: {tipe_show}")
 
-col_form, col_view = st.columns([1, 1.5])
+# KITA PAKAI TABS UNTUK MEMISAHKAN INPUT & DATABASE
+tab1, tab2 = st.tabs(["📝 Pendaftaran Baru", "🛠️ Database & Edit Data"])
 
-with col_form:
-    st.subheader("📝 Form Pendaftaran")
-    pesan_container = st.empty()
-    kunci = str(st.session_state['form_key'])
+# === TAB 1: FORM INPUT (Sama seperti sebelumnya) ===
+with tab1:
+    col_form_main, _ = st.columns([1, 0.1])
+    with col_form_main:
+        pesan_container = st.empty()
+        kunci = str(st.session_state['form_key'])
 
-    owner = st.text_input("Nama Pemilik", key=f"owner_{kunci}")
-    hp = st.text_input("No HP / WA", key=f"hp_{kunci}")
-    st.divider()
-    
-    cat_name = st.text_input("Nama Kucing", key=f"cat_{kunci}")
-    
-    # --- UPDATE UI: Baris Warna & Jenis Kelamin ---
-    c_warna, c_sex = st.columns([1.5, 1])
-    with c_warna:
-        warna = st.text_input("Warna / Pola", key=f"warna_{kunci}", placeholder="e.g. Red Tabby")
-    with c_sex:
-        # INPUT JENIS KELAMIN BARU
-        sex = st.radio("Jenis Kelamin", ["Jantan", "Betina"], horizontal=True, key=f"sex_{kunci}")
-
-    list_ras_utama = [
-        "Persian", "Maine Coon", "British Shorthair (BSH)", 
-        "Bengal", "Other Purebred (Ras Lain)",
-        "Household Pet (Mix)", "Domestik"
-    ]
-    ras_pilih_utama = st.selectbox("Ras Kucing", list_ras_utama, key=f"ras_{kunci}")
-    
-    ras_final = ras_pilih_utama 
-    if ras_pilih_utama == "Other Purebred (Ras Lain)":
-        list_minoritas = ["- (Kosongkan)", "Ragdoll", "Sphynx", "Scottish Fold", "Munchkin", "Abyssinian", "Russian Blue", "Lainnya (Ketik Sendiri)"]
-        sub_ras = st.selectbox("Pilih Detail Ras Lain:", list_minoritas, key=f"sub_ras_{kunci}")
+        owner = st.text_input("Nama Pemilik", key=f"owner_{kunci}")
+        hp = st.text_input("No HP / WA", key=f"hp_{kunci}")
+        st.divider()
         
-        if sub_ras == "Lainnya (Ketik Sendiri)":
-            custom_ras = st.text_input("Ketik Nama Ras:", key=f"custom_ras_{kunci}")
-            if custom_ras: ras_final = f"Other Purebred ({custom_ras})"
-        elif sub_ras != "- (Kosongkan)":
-            ras_final = f"Other Purebred ({sub_ras})"
-    
-    is_mix = ras_final in ["Household Pet (Mix)", "Domestik"]
-    is_tipe_2 = "Tipe 2" in tipe_show
-    
-    if is_mix:
-        status_pilih = "Pet Class" 
-        st.info(f"ℹ️ Kategori Pet Class.")
-    elif is_tipe_2:
-        status_pilih = "-"
-        st.info("ℹ️ Status digabung (One Breed One Class).")
-    else:
-        status_pilih = st.radio("Status Sertifikat?", ["Pedigree", "Non-Pedigree"], horizontal=True, key=f"status_{kunci}")
+        cat_name = st.text_input("Nama Kucing", key=f"cat_{kunci}")
         
-    umur_pilih = st.radio("Kategori Umur?", ["Kitten", "Adult"], horizontal=True, key=f"umur_{kunci}")
-    st.write("")
-    
-    if st.button("Daftarkan Peserta 🚀", type="primary"):
-        if not owner or not cat_name or not warna:
-            pesan_container.error("⚠️ Data belum lengkap!")
-        else:
-            kelas_final = tentukan_kelas(tipe_show, ras_final, status_pilih, umur_pilih)
+        c_warna, c_sex = st.columns([1.5, 1])
+        with c_warna:
+            warna = st.text_input("Warna / Pola", key=f"warna_{kunci}", placeholder="e.g. Red Tabby")
+        with c_sex:
+            sex = st.radio("Jenis Kelamin", ["Jantan", "Betina"], horizontal=True, key=f"sex_{kunci}")
+
+        list_ras_utama = [
+            "Persian", "Maine Coon", "British Shorthair (BSH)", 
+            "Bengal", "Other Purebred (Ras Lain)",
+            "Household Pet (Mix)", "Domestik"
+        ]
+        ras_pilih_utama = st.selectbox("Ras Kucing", list_ras_utama, key=f"ras_{kunci}")
+        
+        ras_final = ras_pilih_utama 
+        if ras_pilih_utama == "Other Purebred (Ras Lain)":
+            list_minoritas = ["- (Kosongkan)", "Ragdoll", "Sphynx", "Scottish Fold", "Munchkin", "Abyssinian", "Russian Blue", "Lainnya (Ketik Sendiri)"]
+            sub_ras = st.selectbox("Pilih Detail Ras Lain:", list_minoritas, key=f"sub_ras_{kunci}")
             
-            data_baru = pd.DataFrame([{
-                "Nama Pemilik": owner, "No HP": hp, "Nama Kucing": cat_name,
-                "Jenis Kelamin": sex, # Simpan Sex
-                "Ras": ras_final, "Warna": warna, "Status": status_pilih,
-                "Kategori Umur": umur_pilih, "Kelas Lomba": kelas_final
-            }])
-            save_data(data_baru)
-            pesan_container.success(f"✅ {cat_name} ({sex}) terdaftar!")
-            reset_form()
-            st.rerun()
+            if sub_ras == "Lainnya (Ketik Sendiri)":
+                custom_ras = st.text_input("Ketik Nama Ras:", key=f"custom_ras_{kunci}")
+                if custom_ras: ras_final = f"Other Purebred ({custom_ras})"
+            elif sub_ras != "- (Kosongkan)":
+                ras_final = f"Other Purebred ({sub_ras})"
+        
+        is_mix = ras_final in ["Household Pet (Mix)", "Domestik"]
+        is_tipe_2 = "Tipe 2" in tipe_show
+        
+        if is_mix:
+            status_pilih = "Pet Class" 
+            st.info(f"ℹ️ Kategori Pet Class.")
+        elif is_tipe_2:
+            status_pilih = "-"
+            st.info("ℹ️ Status digabung (One Breed One Class).")
+        else:
+            status_pilih = st.radio("Status Sertifikat?", ["Pedigree", "Non-Pedigree"], horizontal=True, key=f"status_{kunci}")
+            
+        umur_pilih = st.radio("Kategori Umur?", ["Kitten", "Adult"], horizontal=True, key=f"umur_{kunci}")
+        st.write("")
+        
+        if st.button("Daftarkan Peserta 🚀", type="primary"):
+            if not owner or not cat_name or not warna:
+                pesan_container.error("⚠️ Data belum lengkap!")
+            else:
+                kelas_final = tentukan_kelas(tipe_show, ras_final, status_pilih, umur_pilih)
+                
+                data_baru = pd.DataFrame([{
+                    "Nama Pemilik": owner, "No HP": hp, "Nama Kucing": cat_name,
+                    "Jenis Kelamin": sex,
+                    "Ras": ras_final, "Warna": warna, "Status": status_pilih,
+                    "Kategori Umur": umur_pilih, "Kelas Lomba": kelas_final
+                }])
+                add_data(data_baru)
+                pesan_container.success(f"✅ {cat_name} ({sex}) terdaftar!")
+                reset_form()
+                st.rerun()
 
-with col_view:
-    st.subheader("📋 Data Peserta")
+# === TAB 2: DATABASE & FITUR EDIT/HAPUS (BARU!) ===
+with tab2:
     df = load_data()
     
-    if not df.empty:
-        st.dataframe(df, use_container_width=True, height=400)
+    if df.empty:
+        st.info("Belum ada data peserta.")
+    else:
+        # 1. TAMPILKAN TABEL UTAMA
+        st.dataframe(df, use_container_width=True, height=300)
         
+        # 2. DOWNLOAD BUTTONS
+        col_dl1, col_dl2 = st.columns(2)
+        with col_dl1:
+            excel_data = to_excel_styled(df, tipe_show)
+            st.download_button(
+                label="📄 Download Katalog (Final)",
+                data=excel_data,
+                file_name='Katalog_Catshow.xlsx',
+                mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                use_container_width=True
+            )
+        with col_dl2:
+            csv_backup = df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="💾 Download Backup (CSV)",
+                data=csv_backup,
+                file_name='Backup_Data_Catshow.csv',
+                mime='text/csv',
+                key='download-csv-tab2',
+                use_container_width=True
+            )
+            
         st.divider()
-        st.subheader("📥 Download Katalog")
-        excel_data = to_excel_styled(df, tipe_show)
-        st.download_button(
-            label="📄 Download Katalog (Final)",
-            data=excel_data,
-            file_name='Katalog_Catshow.xlsx',
-            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        
+        # 3. FITUR EDIT & HAPUS
+        st.subheader("🛠️ Edit / Hapus Data")
+        
+        # Trik Selectbox Unik: Gunakan Index sebagai value, tapi tampilkan String Informatif
+        # Format: "Bubu (Persian - Red) | Pemilik: Ahmad"
+        pilihan_edit = st.selectbox(
+            "🔍 Pilih Peserta untuk Diedit/Hapus:",
+            options=df.index,
+            format_func=lambda x: f"{df.loc[x, 'Nama Kucing']} ({df.loc[x, 'Ras']} - {df.loc[x, 'Warna']}) | Pemilik: {df.loc[x, 'Nama Pemilik']}"
         )
         
-        # --- TAMBAHAN: TOMBOL BACKUP (PENTING!) ---
-        st.write("") # Jarak dikit
-        st.caption("⚠️ Jaga-jaga! Download file backup ini secara berkala.")
-        csv_backup = df.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="💾 Download File Backup (CSV)",
-            data=csv_backup,
-            file_name='Backup_Data_Catshow.csv',
-            mime='text/csv',
-            key='download-csv'
-        )
-        
-        with st.expander("Danger Zone"):
-            if st.button("HAPUS DATABASE"):
+        if pilihan_edit is not None:
+            # Ambil data baris yang dipilih
+            row_data = df.loc[pilihan_edit]
+            
+            with st.expander(f"Edit Data: {row_data['Nama Kucing']}", expanded=True):
+                with st.form(key="edit_form"):
+                    col_e1, col_e2 = st.columns(2)
+                    with col_e1:
+                        e_owner = st.text_input("Nama Pemilik", value=row_data['Nama Pemilik'])
+                        e_hp = st.text_input("No HP", value=row_data['No HP'])
+                        e_cat = st.text_input("Nama Kucing", value=row_data['Nama Kucing'])
+                        e_sex = st.selectbox("Jenis Kelamin", ["Jantan", "Betina"], index=0 if row_data['Jenis Kelamin']=="Jantan" else 1)
+                    
+                    with col_e2:
+                        e_ras = st.text_input("Ras (Ketik Manual jika ubah)", value=row_data['Ras'])
+                        e_warna = st.text_input("Warna", value=row_data['Warna'])
+                        e_status = st.selectbox("Status", ["Pedigree", "Non-Pedigree", "Pet Class", "-"], index=["Pedigree", "Non-Pedigree", "Pet Class", "-"].index(row_data['Status']) if row_data['Status'] in ["Pedigree", "Non-Pedigree", "Pet Class", "-"] else 0)
+                        e_umur = st.selectbox("Umur", ["Kitten", "Adult"], index=0 if row_data['Kategori Umur']=="Kitten" else 1)
+
+                    st.caption("⚠️ Kelas Lomba akan dihitung ulang otomatis setelah Update.")
+                    
+                    # TOMBOL AKSI
+                    col_btn1, col_btn2 = st.columns([1, 1])
+                    with col_btn1:
+                        update_submitted = st.form_submit_button("💾 Simpan Perubahan", type="primary", use_container_width=True)
+                    with col_btn2:
+                        delete_submitted = st.form_submit_button("🗑️ Hapus Data Ini", type="secondary", use_container_width=True)
+                
+                # LOGIKA PROSES
+                if update_submitted:
+                    # Update data di dataframe lokal
+                    kelas_baru = tentukan_kelas(tipe_show, e_ras, e_status, e_umur)
+                    
+                    df.loc[pilihan_edit, 'Nama Pemilik'] = e_owner
+                    df.loc[pilihan_edit, 'No HP'] = e_hp
+                    df.loc[pilihan_edit, 'Nama Kucing'] = e_cat
+                    df.loc[pilihan_edit, 'Jenis Kelamin'] = e_sex
+                    df.loc[pilihan_edit, 'Ras'] = e_ras
+                    df.loc[pilihan_edit, 'Warna'] = e_warna
+                    df.loc[pilihan_edit, 'Status'] = e_status
+                    df.loc[pilihan_edit, 'Kategori Umur'] = e_umur
+                    df.loc[pilihan_edit, 'Kelas Lomba'] = kelas_baru
+                    
+                    save_overwrite(df)
+                    st.success("✅ Data berhasil diperbarui!")
+                    st.rerun()
+
+                if delete_submitted:
+                    # Hapus baris berdasarkan index
+                    df = df.drop(index=pilihan_edit)
+                    save_overwrite(df)
+                    st.warning("🗑️ Data telah dihapus.")
+                    st.rerun()
+                    
+        # Tombol Bahaya Hapus Semua (Pindah ke paling bawah tab ini)
+        st.divider()
+        with st.expander("Danger Zone (Hapus Semua Data)"):
+            if st.button("🔴 HAPUS DATABASE (RESET TOTAL)"):
                 if os.path.exists(FILE_DATABASE):
                     os.remove(FILE_DATABASE)
                     st.rerun()
-    else:
-        st.info("Belum ada data.")
 
 # --- FOOTER ---
 st.markdown("""
