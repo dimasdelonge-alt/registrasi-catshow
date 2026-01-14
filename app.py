@@ -134,7 +134,10 @@ def tentukan_kelas(tipe_show, ras_full, status, umur_cat):
 
 # --- SIDEBAR ---
 with st.sidebar:
-    st.image("logo.png", use_container_width=True)
+    # Pastikan file logo.png ada di folder yang sama
+    if os.path.exists("logo.png"):
+        st.image("logo.png", use_container_width=True)
+        
     st.header("⚙️ Konfigurasi Show")
     tipe_show = st.radio("Jenis Show:", ["Tipe 1: Simple (Ped vs Non-Ped)", "Tipe 2: Breed Base (Per Ras)", "Tipe 3: Complex (Breed + Status)"])
     
@@ -266,3 +269,29 @@ with col_view:
                     st.rerun()
     else:
         st.info("Belum ada data.")
+
+# --- FOOTER ---
+st.markdown("""
+<style>
+.footer {
+    position: fixed;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    background-color: #0E1117;
+    color: #FAFAFA;
+    text-align: center;
+    padding: 10px;
+    border-top: 1px solid #333;
+    font-size: 12px;
+    z-index: 1000;
+}
+</style>
+<div class="footer">
+    <p>
+        © 2026 <b>Smart Groomer Indonesia</b> | 
+        System & Website Developed by <b>Arif Dimas</b> <br>
+        <i>All Rights Reserved.</i>
+    </p>
+</div>
+""", unsafe_allow_html=True)
