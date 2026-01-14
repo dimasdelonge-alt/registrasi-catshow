@@ -45,7 +45,7 @@ def add_data(data_baru):
     df_update.to_csv(FILE_DATABASE, index=False)
     return df_update
 
-# --- FUNGSI GENERATE PDF (GRID 8 ID CARD - HEADER CENTER) ---
+# --- FUNGSI GENERATE PDF (GRID 8 ID CARD - FINAL ALIGNMENT) ---
 @st.cache_data
 def generate_number_tags(df_input, current_show_type):
     # 1. SIAPKAN DATA
@@ -107,62 +107,57 @@ def generate_number_tags(df_input, current_show_type):
         header_h = 20 * mm 
         header_y_base = y_start + box_h - header_h
         
-        # Garis pembatas header
         c.setLineWidth(0.5)
         c.line(x_start + 2*mm, header_y_base, x_start + box_w - 2*mm, header_y_base)
         
-        # Logo & Tulisan
         if has_logo:
-            # Logo tetap di kiri
             c.drawImage(logo_path, x_start + 4*mm, header_y_base + 3*mm, width=13*mm, height=13*mm, mask='auto')
-            
-            # --- PERUBAHAN DISINI (JADI TENGAH) ---
             c.setFont("Helvetica-Bold", 11) 
-            
-            # Cari titik tengah kotak secara horizontal
             center_x_header = x_start + (box_w / 2)
-            
-            # Gunakan drawCentredString (bukan drawString biasa)
-            # SMART GROOMER (Baris 1)
             c.drawCentredString(center_x_header, header_y_base + 10*mm, "SMART GROOMER")
-            
-            # INDONESIA (Baris 2)
             c.drawCentredString(center_x_header, header_y_base + 5*mm, "INDONESIA")
-            
         else:
-            # Kalau tidak ada logo (Logika sama)
             c.setFont("Helvetica-Bold", 12)
             center_x_header = x_start + (box_w / 2)
             c.drawCentredString(center_x_header, header_y_base + 10*mm, "SMART GROOMER")
             c.drawCentredString(center_x_header, header_y_base + 5*mm, "INDONESIA")
 
-        # Info Kelas (Pojok Kanan Atas Header)
         c.setFont("Helvetica", 8)
         c.drawRightString(x_start + box_w - 3*mm, header_y_base + 8*mm, f"Kelas: {row_data['Kategori Umur']}")
 
         # --- 2. NOMOR URUT (CENTER) ---
         c.setFont("Helvetica-Bold", 75) 
-        # Tetap pakai MINUS (-) biar aman
         c.drawCentredString(x_start + (box_w/2), y_start + (box_h/2) - 12*mm, nomor_urut)
         
-        # --- 3. FOOTER INFO (BAWAH) ---
+        # --- 3. FOOTER INFO (ALIGNMENT RAPI) ---
         bottom_margin = 5 * mm
-        line_spacing = 4.5 * mm 
+        line_spacing = 4.5 * mm
         
-        # Sex
+        # KUNCI ALIGNMENT: Kita pisah X untuk Label dan X untuk Isi
+        x_label = x_start + 5*mm   # Posisi tulisan "Name", "Breed"
+        x_content = x_start + 22*mm # Posisi TITIK DUA (:) dimulai (harus cukup jauh biar Breed muat)
+        
+        # A. SEX (Paling Bawah)
         c.setFont("Helvetica", 10)
-        c.drawString(x_start + 5*mm, y_start + bottom_margin, f"Sex    : {row_data['Jenis Kelamin']}")
+        c.drawString(x_label, y_start + bottom_margin, "Sex")
+        c.drawString(x_content, y_start + bottom_margin, ": " + str(row_data['Jenis Kelamin']))
         
-        # Breed
+        # B. BREED (Tengah)
         ras_text = f"{row_data['Ras']} ({row_data['Warna']})"
         if len(ras_text) > 35: ras_text = ras_text[:32] + "..."
-        c.drawString(x_start + 5*mm, y_start + bottom_margin + line_spacing, f"Breed : {ras_text}")
         
-        # Name
-        c.setFont("Helvetica-Bold", 11)
+        c.setFont("Helvetica", 10)
+        c.drawString(x_label, y_start + bottom_margin + line_spacing, "Breed")
+        c.drawString(x_content, y_start + bottom_margin + line_spacing, ": " + ras_text)
+        
+        # C. NAME (Paling Atas)
         name_text = str(row_data['Nama Kucing'])
         if len(name_text) > 25: name_text = name_text[:22] + "..."
-        c.drawString(x_start + 5*mm, y_start + bottom_margin + (line_spacing * 2.5), f"Name : {name_text}")
+        
+        c.setFont("Helvetica-Bold", 11) # Name BOLD
+        c.drawString(x_label, y_start + bottom_margin + (line_spacing * 2.2), "Name")
+        # Titik dua & isi nama tetap BOLD biar serasi
+        c.drawString(x_content, y_start + bottom_margin + (line_spacing * 2.2), ": " + name_text)
 
         # LOGIKA PINDAH KOTAK
         x_start += box_w
